@@ -1,4 +1,7 @@
-# Optimizations
+# Inputs and Results
 
-Contained within this directory are the main inputs (or instructions on how they may be generated)
-for training the matrix of force fields against both physical property and QC data.
+This directory contains the main input files required to reproduce the performed optimizations and benchmarks
+which were carried out while training the Sage line of OpenFF force fields.
+
+The individual `optimizations` and `benchmarks` sub-directories contain detailed instructions on how the
+input scripts and files should be used.
