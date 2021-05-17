@@ -1,0 +1,42 @@
+name: openff-force-fields
+
+channels:
+  - simonboothroyd
+  - openeye
+  - conda-forge
+  - omnia
+  - defaults
+
+dependencies:
+
+  - python
+  - pip
+
+  - openeye-toolkits
+
+  # Common dependencies
+  - tqdm
+  - seaborn
+
+  # MNSol data curation
+  - xlrd
+
+  # vdW fitting
+  - nonbonded >= 0.0.1b1
+  - openmm ==7.4.2,>=7.5.1
+  - distributed ==2.30.1
+  - mdtraj ==1.9.4
+
+  # QM fitting
+  - pyyaml
+  - qcportal
+  - torsiondrive
+  - qcelemental
+  - cachetools
+  - chemper
+  - geometric
+  - cachetools
+
+  - pip:
+      - git+git://github.com/openforcefield/openff-qcsubmit.git@master
+      - git+git://github.com/openforcefield/bespoke-fit.git@master

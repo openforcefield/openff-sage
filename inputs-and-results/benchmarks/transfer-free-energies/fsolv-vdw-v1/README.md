@@ -1,0 +1,1 @@
+An benchmark of the force field produced by the `vdw-v1` optimization against a subset of the FreeSolv data set.

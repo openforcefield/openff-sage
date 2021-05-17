@@ -1,0 +1,377 @@
+{
+  "@type": "openff.evaluator.client.client.RequestOptions",
+  "batch_mode": {
+    "@type": "openff.evaluator.client.client.BatchMode",
+    "value": "SameComponents"
+  },
+  "calculation_layers": [
+    "SimulationLayer"
+  ],
+  "calculation_schemas": {
+    "SolvationFreeEnergy": {
+      "SimulationLayer": {
+        "@type": "openff.evaluator.layers.simulation.SimulationSchema",
+        "workflow_schema": {
+          "@type": "openff.evaluator.workflow.schemas.WorkflowSchema",
+          "final_value_source": {
+            "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+            "full_path": "conditional_group/run_solvation_yank.free_energy_difference"
+          },
+          "protocol_schemas": [
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "build_solvated_coordinates",
+              "inputs": {
+                ".allow_merging": true,
+                ".box_aspect_ratio": [
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                ".count_exact_amount": true,
+                ".mass_density": {
+                  "@type": "openff.evaluator.unit.Quantity",
+                  "unit": "g / ml",
+                  "value": 0.95
+                },
+                ".max_molecules": 2000,
+                ".retain_packmol_files": false,
+                ".substance": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "global.substance"
+                },
+                ".tolerance": {
+                  "@type": "openff.evaluator.unit.Quantity",
+                  "unit": "\u00c5",
+                  "value": 2.0
+                },
+                ".verbose_packmol": false
+              },
+              "type": "BuildCoordinatesPackmol"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "assign_solvated_parameters",
+              "inputs": {
+                ".allow_merging": true,
+                ".coordinate_file_path": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "build_solvated_coordinates.coordinate_file_path"
+                },
+                ".force_field_path": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "global.force_field_path"
+                },
+                ".substance": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "global.substance"
+                }
+              },
+              "type": "BaseBuildSystem"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "energy_minimisation",
+              "inputs": {
+                ".allow_merging": true,
+                ".enable_pbc": true,
+                ".input_coordinate_file": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "build_solvated_coordinates.coordinate_file_path"
+                },
+                ".max_iterations": 0,
+                ".parameterized_system": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "assign_solvated_parameters.parameterized_system"
+                },
+                ".tolerance": {
+                  "@type": "openff.evaluator.unit.Quantity",
+                  "unit": "kJ / mol",
+                  "value": 10.0
+                }
+              },
+              "type": "OpenMMEnergyMinimisation"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "equilibration_simulation",
+              "inputs": {
+                ".allow_gpu_platforms": true,
+                ".allow_merging": true,
+                ".checkpoint_frequency": 10,
+                ".enable_pbc": true,
+                ".ensemble": {
+                  "@type": "openff.evaluator.thermodynamics.Ensemble",
+                  "value": "NPT"
+                },
+                ".gradient_parameters": [],
+                ".high_precision": false,
+                ".input_coordinate_file": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "energy_minimisation.output_coordinate_file"
+                },
+                ".output_frequency": 10000,
+                ".parameterized_system": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "assign_solvated_parameters.parameterized_system"
+                },
+                ".steps_per_iteration": 100000,
+                ".thermodynamic_state": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "global.thermodynamic_state"
+                },
+                ".thermostat_friction": {
+                  "@type": "openff.evaluator.unit.Quantity",
+                  "unit": "1 / ps",
+                  "value": 1.0
+                },
+                ".timestep": {
+                  "@type": "openff.evaluator.unit.Quantity",
+                  "unit": "fs",
+                  "value": 2.0
+                },
+                ".total_number_of_iterations": 1
+              },
+              "type": "OpenMMSimulation"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "filter_solvent",
+              "inputs": {
+                ".allow_merging": true,
+                ".component_roles": [
+                  {
+                    "@type": "openff.evaluator.substances.components.Component.Role",
+                    "value": "solv"
+                  }
+                ],
+                ".expected_components": {
+                  "@type": "openff.evaluator.attributes.attributes.UndefinedAttribute"
+                },
+                ".input_substance": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "global.substance"
+                }
+              },
+              "type": "FilterSubstanceByRole"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "filter_solute",
+              "inputs": {
+                ".allow_merging": true,
+                ".component_roles": [
+                  {
+                    "@type": "openff.evaluator.substances.components.Component.Role",
+                    "value": "sol"
+                  }
+                ],
+                ".expected_components": {
+                  "@type": "openff.evaluator.attributes.attributes.UndefinedAttribute"
+                },
+                ".input_substance": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "global.substance"
+                }
+              },
+              "type": "FilterSubstanceByRole"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "build_vacuum_coordinates",
+              "inputs": {
+                ".allow_merging": true,
+                ".box_aspect_ratio": [
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                ".count_exact_amount": true,
+                ".mass_density": {
+                  "@type": "openff.evaluator.unit.Quantity",
+                  "unit": "g / ml",
+                  "value": 0.95
+                },
+                ".max_molecules": 1,
+                ".retain_packmol_files": false,
+                ".substance": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "filter_solute.filtered_substance"
+                },
+                ".tolerance": {
+                  "@type": "openff.evaluator.unit.Quantity",
+                  "unit": "\u00c5",
+                  "value": 2.0
+                },
+                ".verbose_packmol": false
+              },
+              "type": "BuildCoordinatesPackmol"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+              "id": "assign_parameters",
+              "inputs": {
+                ".allow_merging": true,
+                ".coordinate_file_path": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "build_vacuum_coordinates.coordinate_file_path"
+                },
+                ".force_field_path": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "global.force_field_path"
+                },
+                ".substance": {
+                  "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                  "full_path": "filter_solute.filtered_substance"
+                }
+              },
+              "type": "BaseBuildSystem"
+            },
+            {
+              "@type": "openff.evaluator.workflow.schemas.ProtocolGroupSchema",
+              "id": "conditional_group",
+              "inputs": {
+                ".allow_merging": true,
+                ".conditions": [],
+                ".max_iterations": 20
+              },
+              "protocol_schemas": {
+                "run_solvation_yank": {
+                  "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+                  "id": "run_solvation_yank",
+                  "inputs": {
+                    ".allow_merging": true,
+                    ".checkpoint_interval": 1,
+                    ".electrostatic_lambdas_1": [
+                      1.0,
+                      0.75,
+                      0.5,
+                      0.25,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0,
+                      0.0
+                    ],
+                    ".electrostatic_lambdas_2": [
+                      1.0,
+                      0.75,
+                      0.5,
+                      0.25,
+                      0.0
+                    ],
+                    ".gradient_parameters": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "global.parameter_gradient_keys"
+                    },
+                    ".number_of_equilibration_iterations": 1,
+                    ".number_of_iterations": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "total_iterations.result"
+                    },
+                    ".setup_only": false,
+                    ".solute": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "filter_solute.filtered_substance"
+                    },
+                    ".solution_1_coordinates": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "equilibration_simulation.output_coordinate_file"
+                    },
+                    ".solution_1_system": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "assign_solvated_parameters.parameterized_system"
+                    },
+                    ".solution_2_coordinates": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "build_vacuum_coordinates.coordinate_file_path"
+                    },
+                    ".solution_2_system": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "assign_parameters.parameterized_system"
+                    },
+                    ".solvent_1": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "filter_solvent.filtered_substance"
+                    },
+                    ".solvent_2": {
+                      "@type": "openff.evaluator.substances.substances.Substance",
+                      "amounts": {},
+                      "components": []
+                    },
+                    ".steps_per_iteration": 500,
+                    ".steric_lambdas_1": [
+                      1.0,
+                      1.0,
+                      1.0,
+                      1.0,
+                      1.0,
+                      0.95,
+                      0.9,
+                      0.8,
+                      0.7,
+                      0.6,
+                      0.5,
+                      0.4,
+                      0.35,
+                      0.3,
+                      0.25,
+                      0.2,
+                      0.15,
+                      0.1,
+                      0.05,
+                      0.0
+                    ],
+                    ".steric_lambdas_2": [
+                      1.0,
+                      1.0,
+                      1.0,
+                      1.0,
+                      1.0
+                    ],
+                    ".thermodynamic_state": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "global.thermodynamic_state"
+                    },
+                    ".timestep": {
+                      "@type": "openff.evaluator.unit.Quantity",
+                      "unit": "fs",
+                      "value": 2
+                    },
+                    ".verbose": false
+                  },
+                  "type": "SolvationYankProtocol"
+                },
+                "total_iterations": {
+                  "@type": "openff.evaluator.workflow.schemas.ProtocolSchema",
+                  "id": "total_iterations",
+                  "inputs": {
+                    ".allow_merging": true,
+                    ".multiplier": {
+                      "@type": "openff.evaluator.workflow.utils.ProtocolPath",
+                      "full_path": "conditional_group.current_iteration"
+                    },
+                    ".value": 2000
+                  },
+                  "type": "MultiplyValue"
+                }
+              },
+              "type": "ConditionalGroup"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

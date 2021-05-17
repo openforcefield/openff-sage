@@ -1,0 +1,33 @@
+{
+    "connection_options": {
+        "server_address": "localhost",
+        "server_port": 8000
+    },
+    "data_set_path": "training-set.json",
+    "denominators": {
+        "Density": {
+            "@type": "openff.evaluator.unit.Quantity",
+            "unit": "g / ml",
+            "value": 0.05
+        },
+        "EnthalpyOfMixing": {
+            "@type": "openff.evaluator.unit.Quantity",
+            "unit": "kJ / mol",
+            "value": 1.6
+        }
+    },
+    "estimation_options": {
+        "batch_mode": {
+            "@type": "openff.evaluator.client.client.BatchMode",
+            "value": "SharedComponents"
+        },
+        "calculation_layers": [
+            "SimulationLayer"
+        ]
+    },
+    "polling_interval": 600,
+    "weights": {
+        "Density": 1.0,
+        "EnthalpyOfMixing": 1.0
+    }
+}

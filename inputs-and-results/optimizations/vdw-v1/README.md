@@ -1,0 +1,1 @@
+An optimization of the vdW parameters of the `openff-1.3.0` force field against a training set of physical property data.

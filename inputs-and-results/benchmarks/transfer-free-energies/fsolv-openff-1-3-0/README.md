@@ -1,0 +1,1 @@
+An benchmark of the OpenFF 1.3.0 force field against a subset of the FreeSolv data set.
