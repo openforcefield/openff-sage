@@ -1,12 +1,16 @@
 {
-  "qm-structure": "01-processed-qm.sdf",
+  "qm-structure": "02-chunks/01-processed-qm",
   "qm-label": "B3LYP-D3BJ/DZVP",
   "qm-tag": "Energy QCArchive",
   "mm-structures": {
-    "OpenFF 1.2.0": "02-outputs/openff-1-2-0.sdf",
-    "OpenFF 1.3.0": "02-outputs/openff-1-3-0.sdf",
-    "OpenFF TD OPT V1": "02-outputs/vdw-v1-td-opt-v1.sdf",
-    "OpenFF TD OPT V2": "02-outputs/vdw-v1-td-opt-v2.sdf"
+    "GAFF 2.11 + AM1BCC": "02-outputs/gaff-2-11",
+    "OpenFF 1.2.0": "02-outputs/openff-1-2-0",
+    "OpenFF 1.3.0": "02-outputs/openff-1-3-0",
+    "OpenFF TD OPT V3": "02-outputs/td-opt-v3",
+    "OpenFF vdW V1 TD OPT V1": "02-outputs/vdw-v1-td-opt-v1",
+    "OpenFF vdW V1 TD OPT V3": "02-outputs/vdw-v1-td-opt-v3",
+    "OpenFF vdW V1 MS V1 TD OPT V3": "02-outputs/vdw-v1-ms-v1-td-opt-v3",
+    "OpenFF vdW V1 MS V1 TD OPT V4": "02-outputs/vdw-v1-ms-v1-td-opt-v4"
   },
   "mm-tag": "Energy FFXML",
   "record-id-tag": "Record QCArchive"

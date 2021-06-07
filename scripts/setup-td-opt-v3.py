@@ -1,7 +1,6 @@
 import json
 import os.path
 
-from nonbonded.library.models.results import OptimizationResult
 from openff.bespokefit.optimizers.forcebalance import ForceBalanceInputFactory
 from openff.bespokefit.schema.fitting import OptimizationSchema
 from openff.bespokefit.schema.optimizers import ForceBalanceSchema
@@ -21,6 +20,7 @@ from openff.qcsubmit.results import (
     OptimizationResultCollection,
     TorsionDriveResultCollection,
 )
+from openff.toolkit.typing.engines.smirnoff import ForceField
 
 
 def main():
@@ -29,18 +29,10 @@ def main():
         "../data-set-curation/quantum-chemical/data-sets/1-2-0-td-set.json"
     )
     optimization_training_set = OptimizationResultCollection.parse_file(
-        "../data-set-curation/quantum-chemical/data-sets/1-2-0-opt-set-v2.json"
+        "../data-set-curation/quantum-chemical/data-sets/1-2-0-opt-set-v3.json"
     )
 
-    # Retrieve the FF with the fit vdW parameters and remove constraints as FB QM
-    # targets do not support SMIRNOFF force fields which contain these.
-    optimization_results = OptimizationResult.from_rest(
-        project_id="openff-force-fields", study_id="sage", model_id="vdw-v1"
-    )
-
-    initial_force_field = optimization_results.refit_force_field.to_openff()
-    initial_force_field.deregister_parameter_handler("Constraints")
-    initial_force_field.to_file("vdw-v1.offxml")
+    initial_force_field = ForceField("openff_unconstrained-1.3.0.offxml")
 
     # Define the parameters to train
     with open(
@@ -86,8 +78,8 @@ def main():
 
     # Define the full schema for the optimization.
     optimization_schema = OptimizationSchema(
-        id="vdw-v1-td-opt-v2",
-        initial_force_field=os.path.abspath("vdw-v1.offxml"),
+        id="td-opt-v3",
+        initial_force_field="openff_unconstrained-1.3.0.offxml",
         # Define the optimizer / ForceBalance specific settings.
         optimizer=ForceBalanceSchema(
             max_iterations=50,
@@ -138,9 +130,6 @@ def main():
         ),
         optimization_schema,
     )
-
-    # Remove the temporary force field
-    os.unlink("vdw-v1.offxml")
 
 
 if __name__ == "__main__":

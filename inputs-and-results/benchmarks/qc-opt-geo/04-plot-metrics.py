@@ -1,5 +1,4 @@
 import os
-import pickle
 from collections import defaultdict
 from typing import List, Tuple
 
@@ -79,6 +78,12 @@ def draw_step_plot(
     sample_densities = {
         method: numpy.zeros((bootstrap_iterations, n_bins)) for method in method_labels
     }
+
+    if x_range is None:
+        x_range = (
+            min(numpy.nanmin(data) for data in plot_data),
+            max(numpy.nanmax(data) for data in plot_data),
+        )
 
     for sample_index in range(bootstrap_iterations):
 
@@ -214,7 +219,9 @@ def draw_box_plot(
     seaborn.catplot(data=plot_frame, x="method", y=metric, kind="box", dodge=False)
 
     pyplot.xticks(rotation=45)
-    pyplot.ylim(y_range)
+
+    if y_range is not None:
+        pyplot.ylim(y_range)
 
     pyplot.xlabel("Force Field", fontsize=14)
     pyplot.ylabel(metric, fontsize=14)
@@ -243,20 +250,27 @@ def draw_plots(energies, rmsds, tfds, method_labels, output_directory):
         x_range=(-15.0, 15.0),
         output_path=os.path.join(output_directory, "step-dde.png"),
     )
-    draw_box_plot(
-        rmsds,
-        method_labels,
-        metric=r"RMSD ($\mathrm{\AA}$)",
-        y_range=(0, 3),
-        output_path=os.path.join(output_directory, "box-rmsd.png"),
-    )
-    draw_step_plot(
-        rmsds,
-        method_labels,
-        metric=r"RMSD ($\mathrm{\AA}$)",
-        x_range=(0, 3),
-        output_path=os.path.join(output_directory, "step-rmsd.png"),
-    )
+
+    for key, values in rmsds.items():
+        draw_box_plot(
+            values,
+            method_labels,
+            metric=fr"{key} ($\mathrm{{\AA}}$)",
+            y_range=(0, 3) if key == "RMSD" else None,
+            output_path=os.path.join(
+                output_directory, f"box-{key.lower().replace(' ', '_')}.png"
+            ),
+        )
+        draw_step_plot(
+            values,
+            method_labels,
+            metric=fr"{key} ($\mathrm{{\AA}}$)",
+            x_range=(0, 3) if key == "RMSD" else None,
+            output_path=os.path.join(
+                output_directory, f"step-{key.lower().replace(' ', '_')}.png"
+            ),
+        )
+
     draw_box_plot(
         tfds,
         method_labels,
@@ -279,22 +293,60 @@ def draw_plots(energies, rmsds, tfds, method_labels, output_directory):
     "--input",
     "input_path",
     type=click.Path(exists=True, dir_okay=False),
-    default="03-metrics.pkl",
+    default="03-metrics.csv",
 )
 def main(input_path):
 
     print("1) Plotting full metrics")
 
-    with open(input_path, "rb") as file:
-        metrics_per_label = pickle.load(file)
+    metrics_frame = pandas.read_csv(input_path)
 
-    method_labels = [*metrics_per_label]
-    metrics = [metrics_per_label[label] for label in method_labels]
+    method_labels = sorted(metrics_frame["Force Field"].unique())
+
+    metrics = []
+
+    for method_label in method_labels:
+
+        method_frame = metrics_frame[metrics_frame["Force Field"] == method_label]
+
+        metrics.append(
+            (
+                method_frame["SMILES"].values,
+                method_frame["ddE"].values,
+                method_frame["TDF"].values,
+                method_frame["RMSD"].values,
+                method_frame["Bond RMSD"].values,
+                method_frame["Angle RMSD"].values,
+                method_frame["Dihedral RMSD"].values,
+                method_frame["Improper RMSD"].values,
+            )
+        )
 
     # Plot the full statistics
-    energies, rmsds, tfds, smiles = zip(*metrics)
+    (
+        smiles,
+        energies,
+        tfds,
+        full_rmsds,
+        bond_rmsds,
+        angle_rmsds,
+        proper_rmsds,
+        improper_rmsds,
+    ) = zip(*metrics)
 
-    draw_plots(energies, rmsds, tfds, method_labels, os.path.join("04-outputs", "full"))
+    draw_plots(
+        energies,
+        {
+            "RMSD": full_rmsds,
+            "Bond RMSD": bond_rmsds,
+            "Angle RMSD": angle_rmsds,
+            "Proper RMSD": proper_rmsds,
+            "Improper RMSD": improper_rmsds,
+        },
+        tfds,
+        method_labels,
+        os.path.join("04-outputs", "full"),
+    )
 
     # Split the data into per environment results
     per_environment_smiles = defaultdict(set)
@@ -319,7 +371,7 @@ def main(input_path):
 
     per_environment_metrics = defaultdict(list)
 
-    for method_energies, method_rmsds, method_tfds, method_smiles in metrics:
+    for method_smiles, method_energies, method_tfds, method_rmsds, *_ in metrics:
 
         method_data = pandas.DataFrame(
             {
@@ -355,7 +407,7 @@ def main(input_path):
 
         draw_plots(
             environment_energies,
-            environment_rmsds,
+            {"RMSD": environment_rmsds},
             environment_tfds,
             method_labels,
             os.path.join("04-outputs", chemical_environment.value.lower()),

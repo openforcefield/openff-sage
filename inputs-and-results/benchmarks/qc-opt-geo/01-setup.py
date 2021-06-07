@@ -1,7 +1,8 @@
 import logging
+import warnings
 from collections import defaultdict
-from multiprocessing import Pool
-from typing import List, Optional
+from multiprocessing import get_context
+from typing import Tuple
 
 import click
 import qcelemental
@@ -11,15 +12,21 @@ from openff.qcsubmit.results.filters import (
     CMILESResultFilter,
     ConnectivityFilter,
     RecordStatusFilter,
-    ResultRecordFilter,
+    SMILESFilter,
 )
 from openff.toolkit.topology import Molecule
+from openff.toolkit.topology.molecule import SmilesParsingError
 from openff.toolkit.typing.engines.smirnoff import ForceField
-from openff.toolkit.utils import UndefinedStereochemistryError
+from openff.toolkit.utils import (
+    GLOBAL_TOOLKIT_REGISTRY,
+    OpenEyeToolkitWrapper,
+    UndefinedStereochemistryError,
+)
 from qcportal import FractalClient
 from qcportal.models.records import RecordStatusEnum
+from tqdm import tqdm
 
-N_PROCESSES = 24
+N_PROCESSES = 16
 
 
 class InvalidCMILESFilter(CMILESResultFilter):
@@ -27,38 +34,42 @@ class InvalidCMILESFilter(CMILESResultFilter):
 
         try:
             Molecule.from_mapped_smiles(result.cmiles, allow_undefined_stereo=True)
-        except BaseException:
-            logging.exception(f"skipping {result.record_id}")
+        except (ValueError, SmilesParsingError):
             return False
 
         return True
 
 
-def _process_molecule(record_and_molecule) -> Optional[oechem.OEMol]:
+def _can_parameterize(smiles: str) -> Tuple[str, bool]:
+
+    try:
+
+        for toolkit in GLOBAL_TOOLKIT_REGISTRY.registered_toolkits:
+
+            if isinstance(toolkit, OpenEyeToolkitWrapper):
+                continue
+
+            GLOBAL_TOOLKIT_REGISTRY.deregister_toolkit(toolkit)
+
+        molecule = Molecule.from_smiles(smiles, allow_undefined_stereo=True)
+        force_field = ForceField("openff-1.3.0.offxml")
+
+        force_field.create_openmm_system(molecule.to_topology())
+
+    except:
+        return smiles, False
+
+    return smiles, True
+
+
+def _process_molecule(record_and_molecule) -> oechem.OEMol:
     """Convert a QC record and its associated molecule into an OE molecule which
     has been tagged with the associated SMILES, final energy and record id."""
 
-    force_field = ForceField("openff-1.3.0.offxml")
-
     record, molecule = record_and_molecule
 
-    print(f"processing {record.id}")
-
     oe_molecule = molecule.to_openeye()
-    # Re-perceive the stereochemistry from the final conformer.
     oechem.OE3DToInternalStereo(oe_molecule)
-
-    try:
-        molecule = Molecule.from_openeye(oe_molecule)
-    except UndefinedStereochemistryError:
-        print(f"skipping {record.id} - un-perceivable stereo")
-        return None
-
-    try:
-        force_field.create_openmm_system(molecule.to_topology())
-    except BaseException:
-        print(f"skipping {record.id} - cannot parameterize")
-        return None
 
     final_energy = record.get_final_energy() * qcelemental.constants.hartree2kcalmol
 
@@ -91,6 +102,15 @@ def main(data_set):
     `01-processed-qm.json`.
     """
 
+    warnings.filterwarnings("ignore")
+    logging.getLogger("openff.toolkit").setLevel(logging.ERROR)
+
+    # Make sure we consistently only use OE in this script
+    for toolkit in GLOBAL_TOOLKIT_REGISTRY.registered_toolkits:
+        if isinstance(toolkit, OpenEyeToolkitWrapper):
+            continue
+        GLOBAL_TOOLKIT_REGISTRY.deregister_toolkit(toolkit)
+
     print("1a) Parsing collection")
 
     client = FractalClient()
@@ -109,11 +129,42 @@ def main(data_set):
         ConnectivityFilter(),
     )
 
-    print("1c) Retrieving QC records")
+    _, molecules = zip(*result_collection.to_records())
+
+    unique_molecules = set()
+
+    for molecule in molecules:
+
+        # Re-perceive the stereochemistry from the final conformer.
+        oe_molecule = molecule.to_openeye()
+        oechem.OE3DToInternalStereo(oe_molecule)
+
+        try:
+            molecule = Molecule.from_openeye(oe_molecule)
+        except UndefinedStereochemistryError:
+            print(f"skipping {molecule.to_smiles()} - un-perceivable stereo")
+            continue
+
+        unique_molecules.add(molecule.to_smiles(isomeric=True, mapped=False))
+
+    with get_context("spawn").Pool(processes=N_PROCESSES) as pool:
+
+        filtered_smiles = {
+            smiles
+            for smiles, should_retain in tqdm(
+                pool.imap_unordered(_can_parameterize, unique_molecules),
+                total=len(unique_molecules),
+            )
+            if should_retain
+        }
+
+    result_collection = result_collection.filter(
+        SMILESFilter(smiles_to_include=[*filtered_smiles]),
+    )
+
+    print("1e) Grouping molecules")
 
     records_and_molecules = result_collection.to_records()
-
-    print(f"1d) Grouping molecules (N={len(records_and_molecules)})")
 
     grouped_molecules = defaultdict(list)
 
@@ -124,20 +175,14 @@ def main(data_set):
         smiles = molecule.to_smiles(isomeric=False, explicit_hydrogens=True)
         grouped_molecules[smiles].append((record, molecule))
 
-    print(f"1e) Filtering unprocessable molecules (N={len(records_and_molecules)})")
+    print("1f) Processing molecules")
 
-    with Pool(processes=N_PROCESSES) as pool:
+    processed_oe_molecules = [
+        _process_molecule(record_and_molecule)
+        for record_and_molecule in records_and_molecules
+    ]
 
-        processed_oe_molecules: List[oechem.OEMol] = [
-            oe_molecule
-            for oe_molecule in pool.map(
-                _process_molecule,
-                (pair for values in grouped_molecules.values() for pair in values),
-            )
-            if oe_molecule is not None
-        ]
-
-    print(f"1f) Writing processed molecules to sdf (N={len(processed_oe_molecules)})")
+    print("1g) Writing processed molecules to sdf")
 
     output_steam = oechem.oemolostream("01-processed-qm.sdf")
 

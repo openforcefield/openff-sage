@@ -1,7 +1,26 @@
 {
-  "OpenFF 1.2.0": "openff_unconstrained-1.2.0.offxml",
-  "OpenFF 1.3.0": "openff_unconstrained-1.3.0.offxml",
-  "OpenFF TD OPT V1": "vdw-v1-td-opt-v1.offxml",
-  "OpenFF TD OPT V2": "vdw-v1-td-opt-v2.offxml",
-  "OpenFF TD OPT VIB V1": "vdw-v1-td-opt-vib-v1.offxml"
+  "GAFF 2.11 + AM1BCC": {
+      "path": "gaff-2.11",
+      "type": "GAFF"
+  },
+  "OpenFF 1.2.0": {
+      "path": "openff_unconstrained-1.2.0.offxml",
+      "type": "SMIRNOFF"
+  },
+  "OpenFF 1.3.0": {
+      "path": "openff_unconstrained-1.3.0.offxml",
+      "type": "SMIRNOFF"
+  },
+  "OpenFF TD OPT V3": {
+      "path": "td-opt-v3.offxml",
+      "type": "SMIRNOFF"
+  },
+  "OpenFF VDW V1 TD OPT V1": {
+      "path": "vdw-v1-td-opt-v1.offxml",
+      "type": "SMIRNOFF"
+  },
+  "OpenFF VDW V1 TD OPT V3": {
+      "path": "vdw-v1-td-opt-v3.offxml",
+      "type": "SMIRNOFF"
+  }
 }

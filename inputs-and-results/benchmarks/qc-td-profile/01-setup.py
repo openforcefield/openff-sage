@@ -10,22 +10,52 @@ from openff.qcsubmit.results import TorsionDriveResultCollection
 from openff.qcsubmit.results.filters import RecordStatusFilter
 from openff.toolkit.topology import Molecule
 from openff.toolkit.typing.engines.smirnoff import ForceField
+from openmmforcefields.generators import GAFFTemplateGenerator
 from qcportal import FractalClient
 from qcportal.models import TorsionDriveRecord
 from qcportal.models.records import RecordStatusEnum
 from simtk import unit
 from simtk.openmm import openmm
+from simtk.openmm.app import ForceField as OMMForceField
 from tqdm import tqdm
 
 
 @functools.lru_cache()
-def _parameterize_molecule(mapped_smiles: str, force_field_path: str) -> openmm.System:
+def _parameterize_molecule(
+    mapped_smiles: str,
+    force_field_path: str,
+    force_field_type: str,
+) -> openmm.System:
     """Parameterize a particular molecules with a specified force field."""
 
-    force_field = ForceField(force_field_path)
+    off_molecule = Molecule.from_mapped_smiles(mapped_smiles)
 
-    return force_field.create_openmm_system(
-        Molecule.from_mapped_smiles(mapped_smiles).to_topology()
+    if force_field_type.lower() == "smirnoff":
+        force_field = ForceField(force_field_path, allow_cosmetic_attributes=True)
+
+        if "Constraints" in force_field.registered_parameter_handlers:
+            force_field.deregister_parameter_handler("Constraints")
+
+        return force_field.create_openmm_system(off_molecule.to_topology())
+
+    elif force_field_type.lower() == "gaff":
+
+        force_field = OMMForceField()
+
+        generator = GAFFTemplateGenerator(
+            molecules=off_molecule, forcefield=force_field_path
+        )
+
+        force_field.registerTemplateGenerator(generator.generator)
+
+        return force_field.createSystem(
+            off_molecule.to_topology().to_openmm(),
+            nonbondedCutoff=0.9 * unit.nanometer,
+            constraints=None,
+        )
+
+    raise NotImplementedError(
+        "Only SMIRNOFF and GAFF force fields are currently supported."
     )
 
 
@@ -74,7 +104,10 @@ def _minimise_structure(
 
 
 def _compute_profile_and_residual(
-    force_field_path: str, qc_record: TorsionDriveRecord, molecule: Molecule
+    force_field_path: str,
+    force_field_type: str,
+    qc_record: TorsionDriveRecord,
+    molecule: Molecule,
 ) -> Dict[Tuple[int, ...], Tuple[float, float, float]]:
     """Convert a QC record and its associated molecule into an OE molecule which
     has been tagged with the associated SMILES, final energy and record id."""
@@ -92,7 +125,9 @@ def _compute_profile_and_residual(
     dihedral_indices = qc_record.keywords.dihedrals[0]
 
     openmm_system = _parameterize_molecule(
-        molecule.to_smiles(isomeric=True, mapped=True), force_field_path
+        molecule.to_smiles(isomeric=True, mapped=True),
+        force_field_path,
+        force_field_type,
     )
     residual_system = copy.deepcopy(openmm_system)
 
@@ -161,8 +196,8 @@ def _compute_profile_and_residual(
 
 @click.command()
 @click.option(
-    "-i",
-    "--input",
+    "-d",
+    "--data-set",
     "data_set_name",
     default="OpenFF-benchmark-ligand-fragments-v1.0",
     show_default=True,
@@ -181,6 +216,7 @@ def _compute_profile_and_residual(
     "compute the MM torsion profile and residual.",
 )
 @click.option(
+    "-o",
     "--output",
     "output_path",
     default="01-residuals.json",
@@ -223,15 +259,18 @@ def main(data_set_name, force_field_input_path, output_path):
         for qc_record, off_molecule in tqdm(records_and_molecules):
 
             force_field_labels = [*force_fields]
-            force_field_paths = [force_fields[label] for label in force_field_labels]
+            force_field_path_and_types = [
+                (force_fields[label]["path"], force_fields[label]["type"])
+                for label in force_field_labels
+            ]
 
-            force_field_energies = pool.map(
+            force_field_energies = pool.starmap(
                 functools.partial(
                     _compute_profile_and_residual,
                     qc_record=qc_record,
                     molecule=off_molecule,
                 ),
-                force_field_paths,
+                force_field_path_and_types,
             )
 
             for label, energies in zip(force_field_labels, force_field_energies):

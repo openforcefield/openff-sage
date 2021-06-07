@@ -48,13 +48,17 @@ def _extract_molecule_profiles(
 
 
 def _compute_profile_rmse(
-    qm_energies: numpy.ndarray, mm_energies: numpy.ndarray
+    qm_energies: numpy.ndarray, mm_energies: numpy.ndarray, normalize: bool, shift: bool
 ) -> float:
     """Compute the RMSE between a QM and an MM torsion profile after optimally
     superimposing the two."""
 
-    shift = (qm_energies - mm_energies).mean()
-    mm_energies = mm_energies + shift
+    if shift:
+        mm_energies = mm_energies + (qm_energies - mm_energies).mean()
+
+    if normalize:
+        qm_energies = qm_energies / (qm_energies.max() - qm_energies.min())
+        mm_energies = mm_energies / (mm_energies.max() - mm_energies.min())
 
     delta = numpy.sqrt(
         (qm_energies - mm_energies).dot(qm_energies - mm_energies) / len(qm_energies)
@@ -100,7 +104,7 @@ def _smiles_to_img(smiles: str) -> str:
 def plot_torsion_profile(
     angles: numpy.ndarray,
     qm_energies: numpy.ndarray,
-    mm_energies: Dict[str, numpy.ndarray]
+    mm_energies: Dict[str, numpy.ndarray],
 ) -> str:
     """Plots a set of QM and MM torsion profiles and returns the result as a HTML
     encoded image.
@@ -111,11 +115,7 @@ def plot_torsion_profile(
     pyplot.plot(angles, qm_energies, label="QM")
 
     for mm_label in mm_energies:
-
-        shift = (qm_energies - mm_energies[mm_label]).mean()
-        mm_energies_method = mm_energies[mm_label] + shift
-
-        pyplot.plot(angles, mm_energies_method, label=mm_label)
+        pyplot.plot(angles, mm_energies[mm_label], label=mm_label)
 
     pyplot.xlabel("Angle")
     pyplot.ylabel("Energy (kcal / mol)")
@@ -139,6 +139,8 @@ def plot_torsion_profile(
 def plot_per_force_field_rmse(
     energy_frame: pandas.DataFrame,
     output_path: str,
+    normalize: bool,
+    shift: bool,
     bootstrap_iterations: int = 2000,
     percentile=0.95,
 ):
@@ -157,7 +159,10 @@ def plot_per_force_field_rmse(
 
             rmse_values[mm_label].append(
                 _compute_profile_rmse(
-                    numpy.array(qm_energies), numpy.array(mm_energies[mm_label])
+                    numpy.array(qm_energies),
+                    numpy.array(mm_energies[mm_label]),
+                    normalize=normalize,
+                    shift=shift,
                 )
             )
 
@@ -227,10 +232,17 @@ def plot_per_molecule_profile(energy_frame: pandas.DataFrame, output_path: str):
                     angles=angles, qm_energies=qm_energies, mm_energies=mm_energies
                 ),
                 **{
-                    f"{mm_label} RMSE": _compute_profile_rmse(
-                        numpy.array(qm_energies), numpy.array(mm_energies[mm_label])
+                    f"{mm_label} {normalize_label}": _compute_profile_rmse(
+                        numpy.array(qm_energies),
+                        numpy.array(mm_energies[mm_label]),
+                        normalize=normalize,
+                        shift=True,
                     )
                     for mm_label in mm_energies
+                    for normalize, normalize_label in [
+                        (False, "RMSE"),
+                        (False, "Norm RMSE"),
+                    ]
                 },
             }
         )
@@ -292,7 +304,19 @@ def main(input_path, output_directory):
     # Plot the per molecule profiles and global RMSE values.
     print("1) Plotting RMSE values")
 
-    plot_per_force_field_rmse(energy_frame, os.path.join(output_directory, "rmse.png"))
+    plot_per_force_field_rmse(
+        energy_frame,
+        os.path.join(output_directory, "torsion-rmse.png"),
+        normalize=False,
+        shift=True,
+    )
+
+    plot_per_force_field_rmse(
+        energy_frame,
+        os.path.join(output_directory, "torsion-norm-rmse.png"),
+        normalize=True,
+        shift=True,
+    )
 
     print("2) Plotting per molecule profiles")
 

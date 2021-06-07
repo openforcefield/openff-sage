@@ -36,6 +36,8 @@ def main(input_path: str, output_name: str, output_directory: str, n_chunks: int
     chunk_size = (n_molecules + n_chunks - 1) // n_chunks
     chunk_index = 1
 
+    print(f"Chunking file N mols={n_molecules} N chunk={n_chunks} size={chunk_size}")
+
     output_stream = oechem.oemolostream(
         os.path.join(output_directory, f"{output_name}-{chunk_index}.sdf")
     )

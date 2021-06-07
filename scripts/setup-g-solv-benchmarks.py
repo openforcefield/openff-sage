@@ -7,6 +7,10 @@ from nonbonded.library.models.forcefield import ForceField
 from nonbonded.library.models.projects import Benchmark
 from nonbonded.library.models.results import OptimizationResult
 from nonbonded.library.utilities.environments import ChemicalEnvironment
+from openff.evaluator.forcefield import TLeapForceFieldSource
+from openff.toolkit.typing.engines.smirnoff.forcefield import (
+    ForceField as OFFForceField,
+)
 
 PROJECT_ID = "openff-force-fields"
 STUDY_ID = "sage"
@@ -73,19 +77,12 @@ def setup_benchmark(
     name,
     description,
     optimization_id,
-    force_field_path,
+    force_field,
     data_set_id,
 ):
 
-    force_field = None
-
-    if force_field_path is not None:
-
-        from openff.toolkit.typing.engines.smirnoff.forcefield import (
-            ForceField as OFFForceField,
-        )
-
-        force_field = ForceField.from_openff(OFFForceField(force_field_path))
+    if force_field is not None:
+        force_field = ForceField.from_openff(force_field)
 
     benchmark = Benchmark(
         project_id=PROJECT_ID,
@@ -149,6 +146,17 @@ def setup_benchmark(
 def main():
 
     setup_benchmark(
+        benchmark_id="mnsol-gaff-2-11",
+        name="MNSol Benchmark of GAFF 2.11 + AM1BCC",
+        description=(
+            "An benchmark of the GAFF 2.11 force field + the AM1BCC charge model "
+            "against a subset of the MNSol data set."
+        ),
+        optimization_id=None,
+        force_field=TLeapForceFieldSource("leaprc.gaff2"),
+        data_set_id="sage-mnsol-test-v1",
+    )
+    setup_benchmark(
         benchmark_id="mnsol-openff-1-3-0",
         name="MNSol Benchmark of OpenFF 1.3.0",
         description=(
@@ -156,7 +164,7 @@ def main():
             "MNSol data set."
         ),
         optimization_id=None,
-        force_field_path="openff-1.3.0.offxml",
+        force_field=OFFForceField("openff-1.3.0.offxml"),
         data_set_id="sage-mnsol-test-v1"
     )
     setup_benchmark(
@@ -167,10 +175,21 @@ def main():
             "optimization against a subset of the MNSol data set."
         ),
         optimization_id="vdw-v1",
-        force_field_path=None,
+        force_field=None,
         data_set_id="sage-mnsol-test-v1"
     )
 
+    setup_benchmark(
+        benchmark_id="fsolv-gaff-2-11",
+        name="FreeSolv Benchmark of GAFF 2.11 + AM1BCC",
+        description=(
+            "An benchmark of the GAFF 2.11 force field + the AM1BCC charge model "
+            "against a subset of the FreeSolv data set."
+        ),
+        optimization_id=None,
+        force_field=TLeapForceFieldSource("leaprc.gaff2"),
+        data_set_id="sage-fsolv-test-v1",
+    )
     setup_benchmark(
         benchmark_id="fsolv-openff-1-3-0",
         name="FreeSolv Benchmark of OpenFF 1.3.0",
@@ -179,7 +198,7 @@ def main():
             "FreeSolv data set."
         ),
         optimization_id=None,
-        force_field_path="openff-1.3.0.offxml",
+        force_field=OFFForceField("openff-1.3.0.offxml"),
         data_set_id="sage-fsolv-test-v1",
     )
     setup_benchmark(
@@ -190,7 +209,7 @@ def main():
             "optimization against a subset of the FreeSolv data set."
         ),
         optimization_id="vdw-v1",
-        force_field_path=None,
+        force_field=None,
         data_set_id="sage-fsolv-test-v1",
     )
 

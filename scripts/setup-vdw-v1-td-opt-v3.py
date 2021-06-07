@@ -29,7 +29,7 @@ def main():
         "../data-set-curation/quantum-chemical/data-sets/1-2-0-td-set.json"
     )
     optimization_training_set = OptimizationResultCollection.parse_file(
-        "../data-set-curation/quantum-chemical/data-sets/1-2-0-opt-set-v2.json"
+        "../data-set-curation/quantum-chemical/data-sets/1-2-0-opt-set-v3.json"
     )
 
     # Retrieve the FF with the fit vdW parameters and remove constraints as FB QM
@@ -86,7 +86,7 @@ def main():
 
     # Define the full schema for the optimization.
     optimization_schema = OptimizationSchema(
-        id="vdw-v1-td-opt-v2",
+        id="vdw-v1-td-opt-v3",
         initial_force_field=os.path.abspath("vdw-v1.offxml"),
         # Define the optimizer / ForceBalance specific settings.
         optimizer=ForceBalanceSchema(

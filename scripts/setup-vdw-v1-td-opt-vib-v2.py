@@ -16,8 +16,10 @@ from openff.bespokefit.schema.smirnoff import (
 from openff.bespokefit.schema.targets import (
     OptGeoTargetSchema,
     TorsionProfileTargetSchema,
+    VibrationTargetSchema,
 )
 from openff.qcsubmit.results import (
+    BasicResultCollection,
     OptimizationResultCollection,
     TorsionDriveResultCollection,
 )
@@ -31,9 +33,11 @@ def main():
     optimization_training_set = OptimizationResultCollection.parse_file(
         "../data-set-curation/quantum-chemical/data-sets/1-2-0-opt-set-v2.json"
     )
+    hessian_training_set = BasicResultCollection.parse_file(
+        "../data-set-curation/quantum-chemical/data-sets/1-2-0-hess-set-v2.json"
+    )
 
-    # Retrieve the FF with the fit vdW parameters and remove constraints as FB QM
-    # targets do not support SMIRNOFF force fields which contain these.
+    # Define the parameters to train
     optimization_results = OptimizationResult.from_rest(
         project_id="openff-force-fields", study_id="sage", model_id="vdw-v1"
     )
@@ -42,7 +46,6 @@ def main():
     initial_force_field.deregister_parameter_handler("Constraints")
     initial_force_field.to_file("vdw-v1.offxml")
 
-    # Define the parameters to train
     with open(
         "../data-set-curation/quantum-chemical/data-sets/"
         "1-2-0-opt-set-v2-valence-smirks.json"
@@ -86,7 +89,7 @@ def main():
 
     # Define the full schema for the optimization.
     optimization_schema = OptimizationSchema(
-        id="vdw-v1-td-opt-v2",
+        id="vdw-v1-td-opt-vib-v2",
         initial_force_field=os.path.abspath("vdw-v1.offxml"),
         # Define the optimizer / ForceBalance specific settings.
         optimizer=ForceBalanceSchema(
@@ -96,7 +99,7 @@ def main():
             gradient_convergence_threshold=0.1,
             n_criteria=2,
             initial_trust_radius=-1.0,
-            extras={"wq_port": "55125", "asynchronous": "True"},
+            extras={"wq_port": "55124", "asynchronous": "True"},
         ),
         # Define the torsion profile targets to fit against.
         targets=[
@@ -110,6 +113,10 @@ def main():
                 reference_data=optimization_training_set,
                 weight=0.1,
                 extras={"batch_size": 30, "remote": "1"},
+            ),
+            VibrationTargetSchema(
+                reference_data=hessian_training_set,
+                extras={"wavenumber_tol": "200.0", "remote": "1"},
             ),
         ],
         # Define the parameters to refit and the priors to place on them.

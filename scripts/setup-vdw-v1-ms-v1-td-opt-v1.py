@@ -21,6 +21,7 @@ from openff.qcsubmit.results import (
     OptimizationResultCollection,
     TorsionDriveResultCollection,
 )
+from openff.toolkit.typing.engines.smirnoff import ForceField
 
 
 def main():
@@ -29,23 +30,27 @@ def main():
         "../data-set-curation/quantum-chemical/data-sets/1-2-0-td-set.json"
     )
     optimization_training_set = OptimizationResultCollection.parse_file(
-        "../data-set-curation/quantum-chemical/data-sets/1-2-0-opt-set-v2.json"
+        "../data-set-curation/quantum-chemical/data-sets/1-2-0-opt-set.json"
     )
-
-    # Retrieve the FF with the fit vdW parameters and remove constraints as FB QM
-    # targets do not support SMIRNOFF force fields which contain these.
-    optimization_results = OptimizationResult.from_rest(
-        project_id="openff-force-fields", study_id="sage", model_id="vdw-v1"
-    )
-
-    initial_force_field = optimization_results.refit_force_field.to_openff()
-    initial_force_field.deregister_parameter_handler("Constraints")
-    initial_force_field.to_file("vdw-v1.offxml")
 
     # Define the parameters to train
+    original_force_field = ForceField("openff-1.3.0.offxml")
+    initial_force_field = ForceField("openff-1-3-0-msm.offxml")
+
+    for parameter in original_force_field["Bonds"].parameters:
+        initial_force_field["Bonds"].get_parameter({"smirks": parameter.smirks})[
+            0
+        ].length = parameter.length
+    for parameter in original_force_field["Angles"].parameters:
+        initial_force_field["Angles"].get_parameter({"smirks": parameter.smirks})[
+            0
+        ].angle = parameter.angle
+
+    initial_force_field.to_file("openff-1-3-0-msm.offxml")
+
     with open(
         "../data-set-curation/quantum-chemical/data-sets/"
-        "1-2-0-opt-set-v2-valence-smirks.json"
+        "1-2-0-opt-set-valence-smirks.json"
     ) as file:
 
         valence_smirks = json.load(file)
@@ -86,8 +91,8 @@ def main():
 
     # Define the full schema for the optimization.
     optimization_schema = OptimizationSchema(
-        id="vdw-v1-td-opt-v2",
-        initial_force_field=os.path.abspath("vdw-v1.offxml"),
+        id="vdw-v1-ms-v1-td-opt-v1",
+        initial_force_field=os.path.abspath("openff-1-3-0-msm.offxml"),
         # Define the optimizer / ForceBalance specific settings.
         optimizer=ForceBalanceSchema(
             max_iterations=50,
@@ -115,9 +120,9 @@ def main():
         # Define the parameters to refit and the priors to place on them.
         target_parameters=target_parameters,
         parameter_settings=[
-            BondForceSettings(prior=1.0e02),
+            BondForceSettings(prior=1.0e01),
             BondLengthSettings(prior=1.0e-01),
-            AngleForceSettings(prior=1.0e02),
+            AngleForceSettings(prior=1.0e01),
             AngleAngleSettings(prior=2.0e01),
             ProperTorsionSettings(target="k", prior=1.0),
         ],
@@ -138,9 +143,6 @@ def main():
         ),
         optimization_schema,
     )
-
-    # Remove the temporary force field
-    os.unlink("vdw-v1.offxml")
 
 
 if __name__ == "__main__":

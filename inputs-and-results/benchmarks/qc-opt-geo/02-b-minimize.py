@@ -6,8 +6,11 @@ import click
 import numpy
 from openeye import oechem
 from openff.toolkit.topology import Molecule
-from openff.toolkit.typing.engines.smirnoff import ForceField
+from openff.toolkit.typing.engines import smirnoff
+from openff.toolkit.utils import GLOBAL_TOOLKIT_REGISTRY, OpenEyeToolkitWrapper
+from openmmforcefields.generators import GAFFTemplateGenerator
 from simtk import openmm, unit
+from simtk.openmm.app import ForceField
 
 
 def run_openmm(molecule: Molecule, system: openmm.System):
@@ -15,6 +18,12 @@ def run_openmm(molecule: Molecule, system: openmm.System):
     Minimize molecule with specified system and return the positions of the optimized
     molecule.
     """
+
+    # Make sure we consistently only use OE in this script
+    for toolkit in GLOBAL_TOOLKIT_REGISTRY.registered_toolkits:
+        if isinstance(toolkit, OpenEyeToolkitWrapper):
+            continue
+        GLOBAL_TOOLKIT_REGISTRY.deregister_toolkit(toolkit)
 
     integrator = openmm.VerletIntegrator(0.1 * unit.femtoseconds)
 
@@ -36,6 +45,13 @@ def run_openmm(molecule: Molecule, system: openmm.System):
     "-i", "--input", "input_path", type=click.Path(exists=True, dir_okay=False)
 )
 @click.option(
+    "-fftype",
+    "--force-field-type",
+    "force_field_type",
+    type=click.STRING,
+    default="SMIRNOFF",
+)
+@click.option(
     "-ff",
     "--force-field",
     "force_field_path",
@@ -44,12 +60,7 @@ def run_openmm(molecule: Molecule, system: openmm.System):
 @click.option(
     "-o", "--output", "output_path", type=click.Path(exists=False, dir_okay=False)
 )
-def main(input_path, force_field_path, output_path):
-
-    force_field = ForceField(force_field_path)
-
-    if "Constraints" in force_field.registered_parameter_handlers:
-        force_field.deregister_parameter_handler("Constraints")
+def main(input_path, force_field_path, force_field_type, output_path):
 
     input_stream = oechem.oemolistream(input_path)
     output_stream = oechem.oemolostream(output_path)
@@ -79,7 +90,38 @@ def main(input_path, force_field_path, output_path):
                 * unit.angstrom
             ]
 
-            omm_system = force_field.create_openmm_system(off_molecule.to_topology())
+            if force_field_type.lower() == "smirnoff":
+
+                smirnoff_force_field = smirnoff.ForceField(
+                    force_field_path, allow_cosmetic_attributes=True
+                )
+
+                if "Constraints" in smirnoff_force_field.registered_parameter_handlers:
+                    smirnoff_force_field.deregister_parameter_handler("Constraints")
+
+                omm_system = smirnoff_force_field.create_openmm_system(
+                    off_molecule.to_topology()
+                )
+
+            elif force_field_type.lower() == "gaff":
+
+                force_field = ForceField()
+
+                generator = GAFFTemplateGenerator(
+                    molecules=off_molecule, forcefield=force_field_path
+                )
+
+                force_field.registerTemplateGenerator(generator.generator)
+
+                omm_system = force_field.createSystem(
+                    off_molecule.to_topology().to_openmm(),
+                    nonbondedCutoff=0.9 * unit.nanometer,
+                    constraints=None,
+                )
+
+            else:
+
+                raise NotImplementedError()
 
             new_conformer, energy = run_openmm(off_molecule, omm_system)
 

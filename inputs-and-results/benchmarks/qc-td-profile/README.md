@@ -9,7 +9,7 @@ of force fields against a QCArchive torsion drive collection (e.g. `OpenFF-bench
    torsion profiles and residuals, e.g.:
    
    ```shell
-   python 01-setup.py -i "OpenFF-benchmark-ligand-fragments-v1.0"
+   python 01-setup.py --data-set "OpenFF-benchmark-ligand-fragments-v1.0"
    ```
    
 2) Plot the metrics about the torsion drives, and well as the torsion profiles themselves by running the 

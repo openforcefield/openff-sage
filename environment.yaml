@@ -4,7 +4,6 @@ channels:
   - simonboothroyd
   - openeye
   - conda-forge
-  - omnia
   - defaults
 
 dependencies:
@@ -23,7 +22,7 @@ dependencies:
 
   # vdW fitting
   - nonbonded >= 0.0.1b1
-  - openmm ==7.4.2,>=7.5.1
+  - openmm >=7.5.1
   - distributed ==2.30.1
   - mdtraj ==1.9.4
 
@@ -37,6 +36,18 @@ dependencies:
   - geometric
   - cachetools
 
+  # Transfer free energies
+  - requests-mock
+
+  # Relative binding free energies
+  - perses
+  - plotly
+  - scikit-learn
+
+  # QC benchmarks
+  - openmmforcefields
+
   - pip:
       - git+git://github.com/openforcefield/openff-qcsubmit.git@master
       - git+git://github.com/openforcefield/bespoke-fit.git@master
+      - git+git://github.com/openforcefield/openff-arsenic.git@13129d8
