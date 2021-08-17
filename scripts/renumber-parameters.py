@@ -5,6 +5,8 @@ with a parameter handler and {index} is a sequential index starting from 1.
 Certain parameters (i.e. those coming from the TIP3P water model) will be assigned
 more descriptive id's so they can be more easily identified.
 """
+import json
+
 import click
 from openff.toolkit.typing.engines.smirnoff import ForceField
 
@@ -42,6 +44,8 @@ def main(input_file_name: str, output_file_name: str):
         },
     }
 
+    id_map = {}  # id_map[old_id] = new_id
+
     for parameter_handler_name in force_field.registered_parameter_handlers:
 
         if parameter_handler_name not in parameter_id_prefixes:
@@ -60,17 +64,29 @@ def main(input_file_name: str, output_file_name: str):
                 and parameter.smirks in special_parameter_ids[parameter_handler_name]
             ):
 
-                parameter.id = special_parameter_ids[parameter_handler_name][parameter.smirks]
+                new_id = special_parameter_ids[parameter_handler_name][parameter.smirks]
+
+            else:
+
+                parameter_id_prefix = parameter_id_prefixes[parameter_handler_name]
+
+                new_id = (
+                    None if parameter_id_prefix == ""
+                    else f"{parameter_id_prefix}{index + 1}"
+                )
+
+            if parameter.id is not None:
+                id_map[parameter.id] = new_id
+
+            if new_id is None:
                 continue
 
-            parameter_id_prefix = parameter_id_prefixes[parameter_handler_name]
-
-            if parameter_id_prefix == "":
-                continue
-
-            parameter.id = f"{parameter_id_prefix}{index + 1}"
+            parameter.id = new_id
 
     force_field.to_file(output_file_name, "XML")
+
+    with open("id-map.json", "w") as file:
+        json.dump(id_map, file)
 
     # Sanity check that the force field can still be loaded.
     ForceField(output_file_name)
