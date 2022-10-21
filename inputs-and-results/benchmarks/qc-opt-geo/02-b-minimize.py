@@ -11,7 +11,8 @@ from openff.toolkit.utils import GLOBAL_TOOLKIT_REGISTRY, OpenEyeToolkitWrapper
 from openmmforcefields.generators import GAFFTemplateGenerator
 from simtk import openmm, unit
 from simtk.openmm.app import ForceField
-
+#import torch
+#import espaloma as esp #uncomment relevant lines for espaloma evaluation
 
 def run_openmm(molecule: Molecule, system: openmm.System):
     """
@@ -118,6 +119,18 @@ def main(input_path, force_field_path, force_field_type, output_path):
                     nonbondedCutoff=0.9 * unit.nanometer,
                     constraints=None,
                 )
+
+           # elif force_field_type.lower() == "espaloma":
+           #     # grab pretrained model
+           #     if not os.path.exists("espaloma-0.2.2.pt"):
+           #         os.system("wget http://data.wangyq.net/espaloma_model.pt")
+           #     # create an Espaloma Graph object to represent the molecule of interest
+           #     molecule_graph = esp.Graph(off_molecule)
+
+           #     # apply a trained espaloma model to assign parameters
+           #     espaloma_model = torch.load("espaloma-0.2.2.pt") #espaloma_model.pt"
+           #     espaloma_model(molecule_graph.heterograph)
+           #     omm_system = esp.graphs.deploy.openmm_system_from_graph(molecule_graph)
 
             else:
 
