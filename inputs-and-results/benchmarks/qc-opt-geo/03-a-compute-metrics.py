@@ -23,6 +23,55 @@ RMSD_AUTOMORPH = True  # take into acct symmetry related transformations
 RMSD_HEAVY_ONLY = False  # do consider hydrogen atoms for automorphisms
 RMSD_OVERLAY = True  # find the lowest possible RMSD
 
+def compute_rmsd(ref, tar, v_periodic=None):
+    """
+    Compute the RMSD between two arrays, supporting periodic difference
+    Code adapted from FORCEBALANCE
+    Source: https://github.com/leeping/forcebalance/blob/master/src/opt_geo_target.py
+    """
+    assert len(ref) == len(tar), 'array length must match'
+    n = len(ref)
+    if n == 0: return 0.0
+    if v_periodic is not None:
+        diff = periodic_diff(ref, tar, v_periodic)
+    else:
+        diff = ref - tar
+    rmsd = np.sqrt(np.sum(diff**2) / n)
+    return rmsd
+
+def periodic_diff(a, b, v_periodic):
+    ''' convenient function for computing the minimum difference in periodic coordinates
+    Code adapted from FORCEBALANCE
+    Source: https://github.com/leeping/forcebalance/blob/master/src/opt_geo_target.py
+
+    Parameters
+    ----------
+    a: np.ndarray or float
+        Reference values in a numpy array
+    b: np.ndarray or float
+        Target values in a numpy arrary
+    v_periodic: float > 0
+        Value of the periodic boundary
+    Returns
+    -------
+    diff: np.ndarray
+        The array of same shape containing the difference between a and b
+        All return values are in range [-v_periodic/2, v_periodic/2),
+        "( )" means exclusive, "[ ]" means inclusive
+    Examples
+    -------
+    periodic_diff(0.0, 2.1, 2.0) => -0.1
+    periodic_diff(0.0, 1.9, 2.0) => 0.1
+    periodic_diff(0.0, 1.0, 2.0) => -1.0
+    periodic_diff(1.0, 0.0, 2.0) => -1.0
+    periodic_diff(1.0, 0.1, 2.0) => -0.9
+    periodic_diff(1.0, 10.1, 2.0) => 0.9
+    periodic_diff(1.0, 9.9, 2.0) => -0.9
+    '''
+    assert v_periodic > 0
+    h = 0.5 * v_periodic
+    return (a - b + h) % v_periodic - h
+
 
 def _compute_internal_coordinate_rmsd(
     molecule: Molecule,
@@ -40,7 +89,7 @@ def _compute_internal_coordinate_rmsd(
         "elem": [atom.element.symbol for atom in molecule.atoms],
         "bonds": [(bond.atom1_index, bond.atom2_index) for bond in molecule.bonds],
         "name": molecule.name,
-        "xyzs": [qm_conformer, mm_conformer],
+        "xyzs": [qm_conformer],
     }
 
     internal_coordinate_generator = PrimitiveInternalCoordinates(geo_molecule)
@@ -76,12 +125,26 @@ def _compute_internal_coordinate_rmsd(
         qm_values = numpy.array(qm_values)
         mm_values = numpy.array(mm_values)
 
-        delta = qm_values - mm_values
+        # Converting from radians to degrees
+        if ic_type in ["Angle", "Dihedral", "Improper"]:
+            rmsd = compute_rmsd(qm_values*180/numpy.pi, mm_values*180/numpy.pi, 360)
+        else:
+            rmsd = compute_rmsd(qm_values, mm_values)
 
-        rmsd = numpy.sqrt((delta * delta).mean())
         internal_coordinate_rmsd[ic_type] = float(rmsd)
 
-    return internal_coordinate_rmsd
+    fb_objective = 0.0
+    for key, value in internal_coordinate_rmsd.items():
+        if key == "Bond":
+            fb_objective += (1/0.1)*internal_coordinate_rmsd["Bond"]
+        elif key == "Angle":
+            fb_objective += (1/8.0)*internal_coordinate_rmsd["Angle"]
+        elif key == "Dihedral":
+            fb_objective += (1/20.0) * internal_coordinate_rmsd["Dihedral"]
+        elif key == "Improper":
+            fb_objective += (1/20.0) * internal_coordinate_rmsd["Improper"]
+
+    return internal_coordinate_rmsd, fb_objective
 
 
 def _compute_metrics(
@@ -140,7 +203,7 @@ def _compute_metrics(
                 oechem.OEMol(oe_mm_conformer), allow_undefined_stereo=True
             )
 
-            internal_coordinate_rmsds = _compute_internal_coordinate_rmsd(
+            internal_coordinate_rmsds, fb_objective = _compute_internal_coordinate_rmsd(
                 qm_molecule, qm_molecule.conformers[0], mm_molecule.conformers[0]
             )
 
@@ -173,6 +236,8 @@ def _compute_metrics(
                         for ic_type, ic_rmsd in internal_coordinate_rmsds.items()
                     },
                     "TDF": tfd,
+                    "FB OBJECTIVE" : fb_objective,
+                    "Record ID": record_id,
                 }
             )
 
@@ -230,6 +295,7 @@ def main(input_path, index, output_path):
 
     method_labels = [*input_dictionary["mm-structures"]]
 
+    print(method_labels)
     metrics = pandas.concat(
         [_compute_metrics(label, input_dictionary, index) for label in method_labels]
     )
