@@ -48,6 +48,6 @@ dependencies:
   - openmmforcefields
 
   - pip:
-      - git+git://github.com/openforcefield/openff-qcsubmit.git@master
-      - git+git://github.com/openforcefield/bespoke-fit.git@master
+      - git+git://github.com/openforcefield/openff-qcsubmit.git@main
+      - git+git://github.com/openforcefield/bespoke-fit.git@main
       - git+git://github.com/openforcefield/openff-arsenic.git@13129d8
